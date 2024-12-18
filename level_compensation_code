@@ -1,0 +1,110 @@
+## Barometric compensation code for water level logger data by Solinst
+## Author: J.T.C. Snoalv, contact: j.snoalv@gmail.com
+## First Created: 25/11/2024
+
+#0. Set working directory
+setwd('C:/Users/...') ## change to your own
+getwd()
+
+#1. Convert all .csv-files to readable format
+install.packages(c("readr", "writexl", "lubridate", "dplyr", "tidyverse"))
+library(tidyverse)
+library(readr)
+library(writexl)
+library(lubridate)
+library(dplyr)
+
+#set your folder path to csv-files, e.g.:
+csv_files <- list.files(pattern = "*.csv")
+
+for (file in csv_files) {
+  # Read csv-files and convert to XLS-files, write out files to folder
+  data <- read_csv(file)
+  excel_file <- sub(".csv", ".xlsx", file)
+  write_xlsx(data, excel_file)
+}
+
+
+#2. Install and Load packages
+# Install relevant packages
+install.packages(c("tidyverse", "lubridate"))
+
+
+#3. Import and convert .csv-files and create tibble
+#leveldata<- read.csv(file.choose(), header=T, sep=";") #load data, choose .txt file 
+
+headers = read.csv(file.choose(), skip = 1, header = F, nrows = 1, as.is = T, dec=".")
+leveldata = read.csv(file, skip = 11, header = F, sep=";", dec = ".")
+colnames(df)= headers
+colnames(leveldata) <- c("Date","hms","NULL", "Level (psi)", "Temperature (C)")
+
+library("stringr")
+leveldata$`Temperature (C)` <- str_replace_all(leveldata$`Temperature (C)`, ',', '.')
+leveldata$`Level (psi)` <- str_replace_all(leveldata$`Level (psi)`, ',', '.')
+
+
+head(leveldata, dec = ".") #check what you loaded, it is displayed in the R console
+attach(leveldata)
+as.double(leveldata$`Temperature (C)`)
+as.double(leveldata$`Level (psi)`)
+data.frame(leveldata)
+str(leveldata)
+leveldata$`Temperature (C)` <- as.numeric(leveldata$`Temperature (C)`)
+leveldata$`Level (psi)` <- as.numeric(leveldata$`Level (psi)`)
+View(leveldata)
+dim(leveldata) # Explore dimensions
+#table(leveldata['serial_number']) # Check all sensors are accounted for (if relevant column exists)
+
+headers = read.csv(file.choose(), skip = 1, header = F, nrows = 1, as.is = T)
+barodata = read.csv(file, skip = 11, header = F, sep=";", dec = ".")
+colnames(df)= headers
+colnames(barodata) <- c("Date","hms","NULL", "Baro (psi)", "Temperature (C)")
+
+barodata$`Temperature (C)` <- str_replace_all(barodata$`Temperature (C)`, ',', '.')
+barodata$`Baro (psi)` <- str_replace_all(barodata$`Baro (psi)`, ',', '.')
+
+head(barodata, dec = ".") #check what you loaded, it is displayed in the R console
+attach(barodata)
+data.frame(barodata)
+str(barodata)
+barodata$`Temperature (C)` <- as.double(barodata$`Temperature (C)`)
+barodata$`Baro (psi)` <- as.double(barodata$`Baro (psi)`)
+View(barodata)
+dim(barodata) # Explore dimensions
+#table(barodata['serial_number']) # Check all sensors are accounted for (if relevant column exists)
+
+#2. Merge date-time columns
+leveldata$DT <- as.POSIXct(as.character(paste(leveldata$Date, leveldata$hms)), format="%d/%m/%Y %H:%M:%S")
+View(leveldata)
+
+barodata$DT <- as.POSIXct(as.character(paste(barodata$Date, barodata$hms)), format="%d/%m/%Y %H:%M:%S")
+View(barodata)
+
+# 3. Join the dataframes using tidyverse
+merged_df <- merge(leveldata, barodata, by='DT')
+View(merged_df)
+str(merged_df)
+
+# 4. Correct level data by creating a new column with the difference level - baro pressure
+diff = merged_df[,5] - merged_df[,10]
+merged_df = cbind(merged_df,Corrected_level=diff)
+View(merged_df)
+
+#Alternative ways
+# library(dplyr)
+# merged_df %>%
+#   mutate(`Corrected level` = merged_df$`Level (psi)` - merged_df$`Baro (psi)`)
+# 
+# merged_df$`Corrected level` = merged_df$`Level (psi)` - (merged_df$`Baro (psi)`)
+# 
+# `Corrected level` <- transform(merged_df, `Corrected level` = `Level (psi)` - `Baro (psi)`)
+# 
+# merged_df$`Corrected level` <- ((merged_df$`Level (psi)`) - (merged_df$`Baro (psi)`))
+# View(merged_df)
+
+
+#5. Export data as new csv-file, change the file directory to your preference
+
+library(data.table)
+
+fwrite(merged_df, 'C:\\Users\\jtcs201\\OneDrive - University of Exeter\\Documents\\data analysis\\levelloggerdata\\levellogger_test.csv')
